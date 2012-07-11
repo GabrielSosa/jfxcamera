@@ -1,0 +1,59 @@
+<project xmlns:fx="javafx:com.sun.javafx.tools.ant">
+
+    <property name="javafx.sdk.path" value="C:/apps/java/jdk1.7.0_06_32bit"/>
+
+    <property name="app.name" value="jfxcamera"/>
+    <property name="app.title" value="JFX Camera"/>
+    <property name="app.description" value="JavaFX Camera Application (based on LTI CIVIL)"/>
+    <property name="main.class" value="com.zenjava.jfxcamera.JfxCamera"/>
+
+    <property name="src.dir" value="src"/>
+    <property name="lib.dir" value="lib"/>
+
+    <property name="build.dir" value="build"/>
+    <property name="classes.dir" value="${build.dir}/classes"/>
+    <property name="distro.dir" value="${build.dir}/distro"/>
+
+    <path id="classpath">
+        <fileset dir="${lib.dir}" includes="**/*.jar"/>
+    </path>
+
+    <taskdef resource="com/sun/javafx/tools/ant/antlib.xml"      
+            uri="javafx:com.sun.javafx.tools.ant"
+            classpath="${javafx.sdk.path}/lib/ant-javafx.jar"/>
+
+    <target name="clean">
+        <delete dir="${build.dir}"/>
+    </target>
+
+    <target name="compile">
+        <mkdir dir="${classes.dir}"/>
+        <javac srcdir="${src.dir}" destdir="${classes.dir}" classpathref="classpath"/>
+    </target>
+
+    <target name="-pre-jar" depends="compile">
+        <unzip src="lib/lti-civil.jar" dest="${classes.dir}"/>
+    </target>
+
+    <target name="jar" depends="-pre-jar">
+        <fx:jar destfile="${distro.dir}/${app.name}.jar" verbose="true">
+            <fx:application mainClass="${main.class}"/>
+            <fileset dir="${classes.dir}/">
+                <include name="**"/>
+            </fileset>
+        </fx:jar>
+    </target>
+ 
+    <target name="deploy" depends="jar">
+        <fx:deploy width="800" height="600" nativeBundles="all" outdir="${distro.dir}" outfile="${app.name}">
+            <fx:info title="${app.title}"/>
+            <fx:application name="${app.title}" mainClass="${main.class}"/>
+            <fx:resources>
+                <fx:fileset dir="${distro.dir}" includes="*.jar"/>
+                <fx:fileset dir="${lib.dir}" includes="*.dll"/>
+            </fx:resources>
+        </fx:deploy> 
+    </target>
+
+
+</project>
