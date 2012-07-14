@@ -1,18 +1,20 @@
 package com.zenjava.jfxcamera;
 
 import com.lti.civil.*;
-import com.lti.civil.Image;
 import com.lti.civil.awt.AWTImageConverter;
 import javafx.application.Application;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Parent;
 import javafx.scene.Scene;
-import javafx.scene.control.Button;
-import javafx.scene.control.ChoiceBox;
-import javafx.scene.control.TextArea;
-import javafx.scene.image.*;
-import javafx.scene.layout.*;
+import javafx.scene.control.*;
+import javafx.scene.image.ImageView;
+import javafx.scene.layout.BorderPane;
+import javafx.scene.layout.Pane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import javafx.util.StringConverter;
 
@@ -25,6 +27,7 @@ public class JfxCamera extends Application
 {
     private TextArea logTextArea;
     private ChoiceBox<CaptureDeviceInfo> deviceCombo;
+    private Label messageLabel;
     private CaptureSystem system;
     private CaptureStream captureStream;
     private Button initSystemButton;
@@ -32,6 +35,9 @@ public class JfxCamera extends Application
     private Button stopCaptureButton;
     private Button shutdownSystemButton;
     private ImageView imageView;
+    private Button takeSnapshotButton;
+    private VBox snapshotPane;
+    private javafx.scene.image.Image lastImage;
 
     public static void main(String[] args)
     {
@@ -40,7 +46,7 @@ public class JfxCamera extends Application
 
     public void start(Stage stage) throws Exception
     {
-        Scene scene = new Scene(buildView(), 1024, 768);
+        Scene scene = new Scene(buildView(), 1200, 768);
         stage.setScene(scene);
         stage.show();
     }
@@ -61,6 +67,7 @@ public class JfxCamera extends Application
             log("Loading capture devices");
             deviceCombo.getItems().clear();
             List list = system.getCaptureDeviceInfoList();
+            log("Found " + list.size() + " capture devices");
             for (int i = 0, listSize = list.size(); i < listSize; i++)
             {
                 Object device = list.get(i);
@@ -71,16 +78,26 @@ public class JfxCamera extends Application
                 deviceCombo.getItems().add(info);
             }
             deviceCombo.getSelectionModel().selectFirst();
-
-            startCaptureButton.setDisable(false);
-            shutdownSystemButton.setDisable(false);
-
             log("Done loading capture devices");
+
+            shutdownSystemButton.setDisable(false);
+            if (deviceCombo.getItems().size() > 0)
+            {
+                startCaptureButton.setDisable(false);
+                messageLabel.setText("Choose camera from drop down and click 'Start Capture'");
+            }
+            else
+            {
+                messageLabel.setText("No camera found! Do you have one installed and plugged in?");
+                log("No capture devices, you need a supported camera to stream video");
+            }
+
         }
         catch (CaptureException e)
         {
             initSystemButton.setDisable(false);
             logErrror("Unable to initialise system", e);
+            messageLabel.setText("Init failed");
         }
     }
 
@@ -102,13 +119,16 @@ public class JfxCamera extends Application
             captureStream.start();
             log("Capture capture started");
 
+            messageLabel.setText("Showing video from " + deviceInfo.getDescription());
             stopCaptureButton.setDisable(false);
+            takeSnapshotButton.setDisable(false);
         }
         catch (CaptureException e)
         {
             startCaptureButton.setDisable(false);
             shutdownSystemButton.setDisable(false);
             logErrror("Unable to start capture", e);
+            messageLabel.setText("Error starting capture");
         }
     }
 
@@ -117,6 +137,7 @@ public class JfxCamera extends Application
         try
         {
             stopCaptureButton.setDisable(true);
+            takeSnapshotButton.setDisable(true);
 
             log("Stopping camera capture");
             captureStream.stop();
@@ -124,11 +145,13 @@ public class JfxCamera extends Application
 
             startCaptureButton.setDisable(false);
             shutdownSystemButton.setDisable(false);
+            messageLabel.setText("Video capture stopped, want to go again?");
         }
         catch (CaptureException e)
         {
             stopCaptureButton.setDisable(false);
             logErrror("Unable to stop capture", e);
+            messageLabel.setText("Error stopping capture");
         }
     }
 
@@ -145,11 +168,13 @@ public class JfxCamera extends Application
             log("Camera system disposed");
 
             initSystemButton.setDisable(false);
+            messageLabel.setText("Camera system shutdown, but you can start it up again if you want");
         }
         catch (CaptureException e)
         {
             shutdownSystemButton.setDisable(false);
             logErrror("Unable to shutdown camera system", e);
+            messageLabel.setText("Error shutting down system");
         }
     }
 
@@ -170,9 +195,19 @@ public class JfxCamera extends Application
     private Parent buildView()
     {
         BorderPane pane = new BorderPane();
+
+        messageLabel = new Label("Click 'Init Camera System' to start");
+        messageLabel.setMaxWidth(Integer.MAX_VALUE);
+        messageLabel.setAlignment(Pos.CENTER);
+        messageLabel.setStyle("-fx-font-size: 20pt; -fx-padding: 20px; -fx-background-color: #ffffdd; -fx-border-color: gray");
+        pane.setTop(messageLabel);
+
         pane.setLeft(buildButtonArea());
         pane.setCenter(buildPreviewArea());
+        pane.setRight(buildSnapshotArea());
+
         pane.setBottom(buildLogArea());
+
         return pane;
     }
 
@@ -250,11 +285,42 @@ public class JfxCamera extends Application
     private Pane buildPreviewArea()
     {
         StackPane pane = new StackPane();
-        pane.setStyle("-fx-border-color: blue");
+        pane.setStyle("-fx-background-color: #ddd; -fx-border-color: gray");
         imageView = new ImageView();
         pane.getChildren().add(imageView);
         return pane;
     }
+
+    private Pane buildSnapshotArea()
+    {
+        BorderPane pane = new BorderPane();
+        pane.setPrefWidth(180);
+        pane.setStyle("-fx-padding: 20px");
+
+        takeSnapshotButton = new Button("Take Snapshot");
+        takeSnapshotButton.setDisable(true);
+        takeSnapshotButton.setMaxWidth(Integer.MAX_VALUE);
+        takeSnapshotButton.setOnAction(new EventHandler<ActionEvent>() {
+            public void handle(ActionEvent event)
+            {
+                ImageView snapshot = new ImageView(lastImage);
+                snapshot.setStyle("-fx-border-color: gray");
+                snapshot.setFitWidth(155);
+                snapshot.setPreserveRatio(true);
+                snapshotPane.getChildren().add(0, snapshot);
+            }
+        });
+        BorderPane.setMargin(takeSnapshotButton, new Insets(0, 0, 10, 0));
+        pane.setTop(takeSnapshotButton);
+
+        snapshotPane = new VBox(10);
+        ScrollPane scrollPane = new ScrollPane();
+        scrollPane.setContent(snapshotPane);
+        pane.setCenter(scrollPane);
+
+        return pane;
+    }
+
 
     private Pane buildLogArea()
     {
@@ -269,11 +335,17 @@ public class JfxCamera extends Application
 
     private class CaptureHandler implements CaptureObserver
     {
-        public void onNewImage(CaptureStream captureStream, Image image)
+        int count;
+
+        public void onNewImage(CaptureStream captureStream, com.lti.civil.Image image)
         {
-            log("New image captured");
+            if (++count % 100 == 0)
+            {
+                log("Streamed " + count + " frames of video (you should be seeing stuff)");
+            }
+
             BufferedImage bufferedImage = AWTImageConverter.toBufferedImage(image);
-            javafx.scene.image.Image lastImage = javafx.scene.image.Image.impl_fromExternalImage(bufferedImage);
+            lastImage = javafx.scene.image.Image.impl_fromExternalImage(bufferedImage);
             imageView.setImage(lastImage);
         }
 
