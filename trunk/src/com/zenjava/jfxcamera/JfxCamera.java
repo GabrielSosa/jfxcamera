@@ -3,6 +3,7 @@ package com.zenjava.jfxcamera;
 import com.lti.civil.*;
 import com.lti.civil.awt.AWTImageConverter;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.event.ActionEvent;
 import javafx.event.EventHandler;
 import javafx.geometry.Insets;
@@ -34,6 +35,7 @@ public class JfxCamera extends Application
     private Button startCaptureButton;
     private Button stopCaptureButton;
     private Button shutdownSystemButton;
+    private Button stressTestButton;
     private ImageView imageView;
     private Button takeSnapshotButton;
     private VBox snapshotPane;
@@ -92,6 +94,7 @@ public class JfxCamera extends Application
                 log("No capture devices, you need a supported camera to stream video");
             }
 
+            stressTestButton.setDisable(false);
         }
         catch (CaptureException e)
         {
@@ -141,7 +144,8 @@ public class JfxCamera extends Application
 
             log("Stopping camera capture");
             captureStream.stop();
-            log("Capture capture stopped");
+            captureStream.dispose();
+            log("Capture stream stopped");
 
             startCaptureButton.setDisable(false);
             shutdownSystemButton.setDisable(false);
@@ -176,6 +180,12 @@ public class JfxCamera extends Application
             logErrror("Unable to shutdown camera system", e);
             messageLabel.setText("Error shutting down system");
         }
+    }
+
+    protected void startStressTest()
+    {
+        StressTester stressTester = new StressTester();
+        stressTester.start();
     }
 
     protected void log(String message)
@@ -246,10 +256,8 @@ public class JfxCamera extends Application
         startCaptureButton = new Button("Start Capture");
         startCaptureButton.setMaxWidth(Integer.MAX_VALUE);
         startCaptureButton.setDisable(true);
-        startCaptureButton.setOnAction(new EventHandler<ActionEvent>()
-        {
-            public void handle(ActionEvent event)
-            {
+        startCaptureButton.setOnAction(new EventHandler<ActionEvent>() {
+            public void handle(ActionEvent event) {
                 startCapture();
             }
         });
@@ -278,6 +286,17 @@ public class JfxCamera extends Application
             }
         });
         box.getChildren().add(shutdownSystemButton);
+
+        stressTestButton = new Button("Start Stress Test");
+        stressTestButton.setMaxWidth(Integer.MAX_VALUE);
+        stressTestButton.setOnAction(new EventHandler<ActionEvent>()
+        {
+            public void handle(ActionEvent event)
+            {
+                startStressTest();
+            }
+        });
+        box.getChildren().add(stressTestButton);
 
         return box;
     }
@@ -352,6 +371,64 @@ public class JfxCamera extends Application
         public void onError(CaptureStream captureStream, CaptureException e)
         {
             logErrror("Error during capture", e);
+        }
+    }
+
+    //-------------------------------------------------------------------------
+
+    private class StressTester extends Thread
+    {
+        private boolean active;
+
+        public synchronized void start() {
+            active = true;
+            super.start();
+        }
+
+        public void stopStressTesting()
+        {
+            active = false;
+            interrupt();
+        }
+
+        public void run()
+        {
+            Platform.runLater(new Runnable() {
+                public void run() {
+                    initialiseSystem();
+                }
+            });
+
+            try { Thread.sleep(1000); } catch (Exception e) {};
+
+            int rounds = 0;
+
+            while (active)
+            {
+                try
+                {
+                    Platform.runLater(new Runnable() {
+                        public void run() {
+                            startCapture();
+                        }
+                    });
+
+                    Thread.sleep(3000);
+
+                    Platform.runLater(new Runnable() {
+                        public void run() {
+                            stopCapture();
+                        }
+                    });
+
+                    System.out.println("*** Stress test completed " + ++rounds + " rounds");
+                }
+                catch (Exception e)
+                {
+                    System.out.println("Stress Test caught exception: " + e);
+                    e.printStackTrace();
+                }
+            }
         }
     }
 }
